@@ -1,6 +1,6 @@
 ---
 title: "STAT 209: Lab 7"
-author: "Colin Reimer Dawson"
+author: "Casey Troost"
 date: "June 29, 2021"
 output:
   html_document:
@@ -57,11 +57,11 @@ palette(brewer.pal(n = 3, name = "Set2"))
 ### Uncle Jess(i)e vs... Great Aunt Jessie?
 
 ```{r, echo = FALSE, out.width="300px", fig.cap = "80s Heart-throb Uncle Jesse, Born During Jessie's Most Male Era (Source: [Bustle](https://www.bustle.com/articles/78132-7-times-full-houses-uncle-jesse-was-your-biggest-crush-because-this-rock-star-stole-the))"}
-knitr::include_graphics("uncle-jesse.jpg")
+#knitr::include_graphics("uncle-jesse.jpg")
 ```
 
 ```{r, echo = FALSE, out.width="200px", fig.cap = "A Random Redditor's Great Aunt Jessie, Apparently; Born during Peak Jessie (Source: [Reddit](https://www.reddit.com/r/OldSchoolCool/comments/49249f/my_great_aunt_jessie_1940s/))"}
-knitr::include_graphics("great-aunt-jessie.jpg")
+#knitr::include_graphics("great-aunt-jessie.jpg")
 ```
     
 For the examples below I'll look at the name "Jessie", which bounced around in its dominant gender connotation during the period of this data, but has consistently been at least reasonably popular for both males and females.
@@ -70,8 +70,8 @@ One way to answer the question of interest would be to extract the counts for "J
 
 **Code:**
 ```{r}
-babynames %>%
-  filter(name == "Jessie")
+Jessie <- babynames %>%
+            filter(name == "Jessie")
 ```
 
 But this is time consuming and error prone, and requires mental arithmetic, especially if we want our criterion to be percentage based.
@@ -83,7 +83,16 @@ We can create a quick plot to estimate the solution visually.
 ---
 
 ##### SOLUTION
+```{r}
+Jessie_plot <- babynames %>%
+  filter(name == "Jessie") %>%
+  ggplot(aes(x = year, y = n)) +
+  geom_line(stat = "identity", aes(y = n)) +
+  facet_wrap(~ sex)
 
+Jessie_plot
+
+```
 
 It looks like the lines cross somewhere around 1950, and then cross a few more times between 1980 and 2010 or so.
 
@@ -96,10 +105,8 @@ What we'd like is to create a variable that actually tells us the relative numbe
 2. Often when we want to create a new variable, we can use `mutate()`.  But that won't work in this case.  Why not?
 
 ---
-
 ##### EXPLANATION
-
-
+I think one reason why using mutate would be hard would be that (n) counts the number of babies for both boys and girls. So if you subtract "n" from "n" each year, you'll always get 0.
 ---
 
 ### Using `summarize()` to do conditional counting
@@ -128,12 +135,24 @@ The `ifelse()` command operates on each entry in a variable, evaluating the cond
 ---
 
 ##### SOLUTION
-
+```{r}
+babynames %>%
+  filter(name == "Jessie" & year == 1982) %>%
+  mutate(
+    count_if_males   = ifelse(sex == "M", n, 0),
+    count_if_females = ifelse(sex == "F", n, 0)) %>%
+  summarize(
+    total         = sum(n),
+    total_males   = sum(count_if_males),
+    total_females = sum(count_if_females)) %>%
+  mutate(
+    male_prop = total_males / (total_males + total_females)
+  )
+```
 
 ---
 
 So `filter()` together with `summarize()` gives us a proportion for a specific year.  We could in principle repeat this for each year in the data and see which one comes out closest to 0.5.  But this would be tedious, not to mention error-prone.
-
 
 ### Combining `group_by()` and `summarize()` to summarize by group
 
@@ -189,10 +208,19 @@ Before we tackle that, though, here are some other questions you can answer with
 4. In what year was the largest _total_ number of Jessies born (combining sexes)?  How many Jessies were born that year? Use `group_by()` and `summarize()` together with any other relevant verbs to answer both of these questions in a single pipeline. Your code should return a summarized data frame with two columns: `peak_year` and `peak_jessies`. The rows should consist of only the year(s) when Jessie hit its all time peak, along with the number of births in that (those) year(s).
 
 ---
-
 ##### SOLUTION
+```{r}
+babynames %>%
+  filter(name == "Jessie") %>%
+  group_by(year) %>%
+  summarize(
+    N = n(),
+    count_jessies = sum(n),
+    max_jessies = max(count_jessies) %>%
+  slice_max(
+    order_by = count_jessies)
 
-
+```
 ---
 
 5. Create a summary table that shows, for each name, the first year it appears in the data and the last year it appears in the data. You can use the `min()` and `max()` aggregation functions to find the smallest and largest values (respectively) in a set of data. (Warning: the result is pretty big, so it might put some strain the server when everyone is working on it at the same time. Save your files before running this one, and if it hangs, don't close your browser tab -- instead try closing your RStudio project, logging out and then logging in again.)
