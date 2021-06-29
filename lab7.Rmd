@@ -1,0 +1,250 @@
+---
+title: "STAT 209: Lab 7"
+author: "Colin Reimer Dawson"
+date: "June 29, 2021"
+output:
+  html_document:
+    css: ~/stat209/originals/lab.css
+    highlight: pygments
+    theme: cerulean
+    code_folding: hide
+    toc: true
+    toc_float: true
+  pdf_document: default
+---
+
+```{r setup, include = FALSE}
+## This is a setup/formatting chunk
+library(tidyverse)  # We will primarily use the tidyverse and mosaic packages
+
+## Some customization.  (Leave this part alone)
+
+theme_set(theme_bw()) # change theme for ggplot2
+
+## Sets default "chunk options"
+knitr::opts_chunk$set(
+  tidy    = FALSE,       # display code as typed
+  size    = "small",     # slightly smaller font for code
+  message = FALSE)  # suppresses some unwanted output
+```
+
+
+## Aggregating Data by Group
+
+### Goal
+
+To get some focused practice summarizing subsets of data separately using `group_by()` together with `summarize()`
+
+### Resources
+
+For convenience, the link to the `dplyr` reference sheet is [here](http://colindawson.net/stat209/resources/dplyr-quick-reference.pdf) 
+
+### The Data
+
+We'll continue using the `babynames` dataset.  We'll start out exploring the question I asked you to "think about" but not actually answer from the last lab:
+
+**For a chosen name, find the year that that name was the most equally split between male and female babies: that is, the year when the sex distribution was closest to 50/50.**
+
+#### Preliminaries (loading packages and data, and setting the default color palette):
+
+```{r, message = FALSE}
+library(tidyverse)
+library(babynames)
+library(RColorBrewer)
+palette(brewer.pal(n = 3, name = "Set2"))
+```
+
+### Uncle Jess(i)e vs... Great Aunt Jessie?
+
+```{r, echo = FALSE, out.width="300px", fig.cap = "80s Heart-throb Uncle Jesse, Born During Jessie's Most Male Era (Source: [Bustle](https://www.bustle.com/articles/78132-7-times-full-houses-uncle-jesse-was-your-biggest-crush-because-this-rock-star-stole-the))"}
+knitr::include_graphics("uncle-jesse.jpg")
+```
+
+```{r, echo = FALSE, out.width="200px", fig.cap = "A Random Redditor's Great Aunt Jessie, Apparently; Born during Peak Jessie (Source: [Reddit](https://www.reddit.com/r/OldSchoolCool/comments/49249f/my_great_aunt_jessie_1940s/))"}
+knitr::include_graphics("great-aunt-jessie.jpg")
+```
+    
+For the examples below I'll look at the name "Jessie", which bounced around in its dominant gender connotation during the period of this data, but has consistently been at least reasonably popular for both males and females.
+
+One way to answer the question of interest would be to extract the counts for "Jessie" and manually scan the data to see when they are closest to equal.
+
+**Code:**
+```{r}
+babynames %>%
+  filter(name == "Jessie")
+```
+
+But this is time consuming and error prone, and requires mental arithmetic, especially if we want our criterion to be percentage based.
+
+We can create a quick plot to estimate the solution visually.
+
+1. In a single "pipeline", make a line graph depicting the number of babies named "Jessie" for each year in the `babynames` data, separated by sex. What years (approximately) appear to have the closest to a 50/50 split by sex?
+
+---
+
+##### SOLUTION
+
+
+It looks like the lines cross somewhere around 1950, and then cross a few more times between 1980 and 2010 or so.
+
+---
+
+But this still isn't an exact solution.
+
+What we'd like is to create a variable that actually tells us the relative number of males and females associated with the name "Jessie" in each year.
+
+2. Often when we want to create a new variable, we can use `mutate()`.  But that won't work in this case.  Why not?
+
+---
+
+##### EXPLANATION
+
+
+---
+
+### Using `summarize()` to do conditional counting
+
+The quantity we are interested in requires us to aggregate data from multiple cases.  This is what `summarize()` is good for: take a dataset and apply a function that takes a set of values as input and returns a single value as output.  These functions, such as `sum()`, `mean()`, `max()`, and `n()`, are called **aggregation** functions.
+
+For example, I can compute the number of male Jessies born in a particular year (let's say 1982) by using `filter()` to extract the data from 1982, and then using `summarize()` together with `sum()`, combined with a conditional function like `ifelse()` to replace the values I'm not interested in with zeroes.  Like so:
+
+**Code:**
+```{r}
+babynames %>%
+  filter(name == "Jessie" & year == 1982) %>%
+  mutate(
+    count_if_males   = ifelse(sex == "M", n, 0),
+    count_if_females = ifelse(sex == "F", n, 0)) %>%
+  summarize(
+    total         = sum(n),
+    total_males   = sum(count_if_males),
+    total_females = sum(count_if_females))
+```
+
+The `ifelse()` command operates on each entry in a variable, evaluating the condition given in its first argument for that entry, and returning the second argument if the condition is met, and the third if it isn't.  In this case, `ifelse(sex == "M", n, 0)` says to look at the `sex` column, and if it is equal to `"M"`, return the value `n`, otherwise return 0.  Then, the `sum()` function adds up the results.
+
+3. Add to the command above, using `mutate()` again on the summarized results to get the proportion of babies named Jessie in 1982 that were male.
+
+---
+
+##### SOLUTION
+
+
+---
+
+So `filter()` together with `summarize()` gives us a proportion for a specific year.  We could in principle repeat this for each year in the data and see which one comes out closest to 0.5.  But this would be tedious, not to mention error-prone.
+
+
+### Combining `group_by()` and `summarize()` to summarize by group
+
+Instead, we can use `group_by()` to "slice" the data by year, and `summarize()` each slice:
+
+**Code:**
+```{r}
+jessies_by_year <- babynames %>%
+  filter(name == "Jessie") %>%
+  mutate(
+    count_if_males   = ifelse(sex == "M", n, 0),
+    count_if_females = ifelse(sex == "F", n, 0)) %>%    
+  group_by(year) %>%
+  summarize(
+    num_rows     = n(),                 # just a sanity check
+    total_births = sum(n),              # total "Jessies" that year
+    total_males    = sum(count_if_males), # conditional counting
+    total_females = sum(count_if_females)) %>%
+  mutate(prop_males = total_males / total_births)
+jessies_by_year
+```
+
+
+Let's plot the proportion by year, just for fun:
+
+**Code:**
+```{r}
+jessies_by_year %>%
+  ggplot(aes(x = year, y = prop_males)) +
+  geom_line() +
+  geom_hline(
+    yintercept = 0.5, 
+    lty        = 3) +
+  scale_y_continuous(
+    name   = "% Male",
+    breaks = seq(from = 0, to = 1, by   = 0.1),  # Modifying where tick marks and gridlines are drawn
+    labels = seq(from = 0, to = 100, by = 10)) +
+  scale_x_continuous(
+    name   = "Year", 
+    breaks = seq(from = 1880, to = 2020, by = 10)) +
+  ggtitle("Gender Breakdown of the name 'Jessie' in the U.S. over Time")
+```
+
+We can now see with one line what we could see before by seeing when our two lines crossed.
+
+But we'd still like an exact answer to the question "In what year was the proportion closest to 50/50?"
+
+
+### Interlude: Other uses of the `group_by()` and `summarize()` combo
+
+Before we tackle that, though, here are some other questions you can answer with the `group_by()` and `summarize()` one-two punch:
+
+4. In what year was the largest _total_ number of Jessies born (combining sexes)?  How many Jessies were born that year? Use `group_by()` and `summarize()` together with any other relevant verbs to answer both of these questions in a single pipeline. Your code should return a summarized data frame with two columns: `peak_year` and `peak_jessies`. The rows should consist of only the year(s) when Jessie hit its all time peak, along with the number of births in that (those) year(s).
+
+---
+
+##### SOLUTION
+
+
+---
+
+5. Create a summary table that shows, for each name, the first year it appears in the data and the last year it appears in the data. You can use the `min()` and `max()` aggregation functions to find the smallest and largest values (respectively) in a set of data. (Warning: the result is pretty big, so it might put some strain the server when everyone is working on it at the same time. Save your files before running this one, and if it hangs, don't close your browser tab -- instead try closing your RStudio project, logging out and then logging in again.)
+
+---
+
+##### SOLUTION
+
+
+
+---
+
+6. There are 16 names that were assigned to babies of both sexes in _every_ year from 1880 to 2017.  List them.  Hint: if a name has zero births for a particular sex in a particular year, there is no entry in the data for that year/sex/name combination. Names that appear for both sexes (and only those names) will have $2 \cdot (2017 - 1880 + 1)$ entries in the table.
+
+---
+
+##### SOLUTION
+
+
+---
+
+Interestingly, some of these (like John and William) have a strong connotation with a particular sex today, but they are such common names overall that a few instances of the opposite sex appear in every single year.
+
+7. Write a pipeline to return the 10 most common names (combining sexes) of the 1990s, arranged in descending order of popularity.
+
+---
+
+##### SOLUTION
+
+
+---
+
+8. This one is really challenging, but provides a strong test of how well you understand these verbs and how to combine them. Don't worry if you can't figure it out, but give it your best shot: **Find the names that were "popular" in your birth year** (where "popular" is defined as being assigned to 1% or more of _all_ births, irrespective of sex), and determine **which one made its first appearance latest**.  That is, what's the "youngest" popular name for your birth year?  (This (I think) requires more than one "pipeline": one to get a list of popular names in your birth year and another to extract the earliest appearance of each name and summarize.  You will probably need to use `pull(DataSet, VariableName)` to extract a column as a free-standing object, and the `%in%` operator to check whether an entry is in a set)!
+
+---
+
+##### SOLUTION
+
+
+---
+
+9. Create and plot a variable that represents the "name diversity" in each year, defined as the number of distinct names that appear in the dataset.  If you are so inclined, create additional variables that compute this for only males and for only females.
+
+---
+
+##### SOLUTION
+
+
+---
+
+
+10. Use `group_by()`, `summarize()`, and `ggplot()` together (along with perhaps some other wrangling verbs) to create an interesting and informative visualization on a topic of your choosing (other than baby names).  You might want to look back at Lab 2 for links to data sources.  Share a code snippet and graphic to the `#lab7` channel on Slack.
+
+11. What did you find particularly interesting/challenging about this lab? Post your response alongside your plot on the `#lab7` channel.
+
