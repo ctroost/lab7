@@ -247,13 +247,9 @@ babynames %>%
 ```{r}
 babynames %>%
   group_by(name) %>%
-  mutate(
-    girl_count = ifelse(sex == "F", 1, 0),
-    boy_count = ifelse(sex == "M", 1, 0)) %>%
-  mutate(
-    total_count = sum(girl_count) + sum(boy_count)) %>%
-  select(name, total_count) %>%
-  filter(total_count == 276) #this wouldn't run
+  summarize(
+    year_count = sum(n())) %>%
+  filter(year_count == 276) #this wouldn't run
   
 #will be 276 entries for both girls and boys of a name 
 ```
@@ -267,15 +263,14 @@ Interestingly, some of these (like John and William) have a strong connotation w
 ##### SOLUTION
 ```{r}
 babynames %>%
-  filter(year %in% 1990:1999) %>% #this is where I got stuck
+  filter(year %in% 1990:1999) %>%
   group_by(name) %>% 
-  mutate(
+  summarize(
+    name = name,
     popularity = sum(prop)) %>%
-  select(name, popularity) %>%
   arrange(desc(popularity)) %>%
   distinct(name, popularity) %>%
   head(n = 10)
-#this is when babynames stopped existing
 ```
 ---
 
@@ -286,24 +281,29 @@ babynames %>%
 ```{r}
 names_1998 <- babynames %>%
   filter(year == 1998) %>%
-  group_by(name) %>%
   mutate(
-    total_births = sum(n)) %>%
-  filter(total_births > 39650)
+    total_prop = n / 3677107) %>% #create proportion that takes births for both genders into account for each name & gender entry
+  group_by(name) %>%
+  summarize(
+    MF_total_prop = sum(total_prop), #combine proportions from both genders
+    name = name) %>%
+  distinct(name, MF_total_prop) %>% #erase duplicate entries
+  arrange(desc(MF_total_prop)) %>% #see the most popular names(there's nothing more than 1%?)
+  head(n = 10)
 
-babynames %>%
+latest_1998_appearance <- babynames %>%
   filter(name %in% c(pull(names_1998, name))) %>%
   group_by(name) %>%
   mutate(
     earliest_year = min(year)) %>%
-  slice_max(
-    order_by = earliest_year)
+  select(name, earliest_year) %>%
+  distinct(name, earliest_year) %>%
+  arrange(desc(earliest_year)) %>%
+  inner_join(names_1998, by = "name")
 
-babynames
-#total girls: 1938009
-#total boys: 2027135
-#total: 3965144
-#n must be more than: 39, 651
+latest_1998_appearance
+#found total_prop by summing n, checked proportions were correct by summing total_prop and getting 1
+#total births: 3677107
 ```
 
 ---
@@ -313,19 +313,54 @@ babynames
 ---
 ##### SOLUTION
 ```{r}
-babynames %>%
+diversity <- babynames %>%
   group_by(year) %>%
-  mutate(
-    diversity = unique(name)) 
+  distinct(name) %>%
+  summarize(
+    name_diversity = sum(n()),
+    year = year) %>%
+  distinct(year, name_diversity)
 
-diversity_plot <- ggplot(babynames, aes(x = diversity, y = year)) %>%
-  geom_line(stat = "identity", aes(y = diversity))
+diversity_plot <- ggplot(diversity, aes(x = year, y = name_diversity)) +
+  geom_line(stat = "identity", aes(y = name_diversity))
+
+diversity_plot
   
 ```
 ---
 
 
 10. Use `group_by()`, `summarize()`, and `ggplot()` together (along with perhaps some other wrangling verbs) to create an interesting and informative visualization on a topic of your choosing (other than baby names).  You might want to look back at Lab 2 for links to data sources.  Share a code snippet and graphic to the `#lab7` channel on Slack.
+```{r}
+library(Lock5Data)
+data(Cereal)
+
+Company_names <- c("General Mills", "Kellogs", "Quaker")
+Company <- c("G", "K", "Q")
+Company_names_frame <- data.frame(Company_names, Company)
+
+Cereal_frame <- Cereal %>%
+  group_by(Company) %>%
+  summarize(
+    avg_calories = sum(Calories) / n(),
+    avg_carbs = sum(Carbs) / n(),
+    avg_sodium = sum(Sodium) / n()) %>%
+  inner_join(Company_names_frame, join_by = "Company")
+
+Cereal_frame
+
+Cereal_plot <- ggplot(Cereal_frame, aes(x = Company_names, y = avg_calories)) +
+  geom_bar(position = "stack", stat = "identity", aes(y = avg_sodium), fill = "blue") +
+  geom_bar(stat = "identity", position = "stack", aes(y = avg_calories), fill = "red") +
+  geom_bar(position = "stack", stat = "identity", aes(y = avg_carbs), fill = "green") +
+  ylab("grams / calories / miligrams") +
+  xlab("Cereal Company") +
+  ggtitle("Average Calories, Carbs, and Sodium per cup for Cereal Companies", subtitle = "Green: Carbs (g), Red: Calories, Blue: Sodium (mg)")
+
+Cereal_plot
+```
 
 11. What did you find particularly interesting/challenging about this lab? Post your response alongside your plot on the `#lab7` channel.
+
+I really liked learning the verbs, it's fun to wrangle data! It was also really challenging to understand the full implications of each verb. 
 
