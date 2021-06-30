@@ -52,6 +52,7 @@ library(tidyverse)
 library(babynames)
 library(RColorBrewer)
 palette(brewer.pal(n = 3, name = "Set2"))
+babynames <- babynames #tried to fix problem of babynames not existing
 ```
 
 ### Uncle Jess(i)e vs... Great Aunt Jessie?
@@ -215,10 +216,12 @@ babynames %>%
   group_by(year) %>%
   summarize(
     N = n(),
-    count_jessies = sum(n),
-    max_jessies = max(count_jessies) %>%
+    count_jessies = sum(n)) %>%
   slice_max(
-    order_by = count_jessies)
+    order_by = count_jessies) %>%
+  rename(
+    peak_year = year,
+    peak_jessies = count_jessies)
 
 ```
 ---
@@ -226,20 +229,34 @@ babynames %>%
 5. Create a summary table that shows, for each name, the first year it appears in the data and the last year it appears in the data. You can use the `min()` and `max()` aggregation functions to find the smallest and largest values (respectively) in a set of data. (Warning: the result is pretty big, so it might put some strain the server when everyone is working on it at the same time. Save your files before running this one, and if it hangs, don't close your browser tab -- instead try closing your RStudio project, logging out and then logging in again.)
 
 ---
-
 ##### SOLUTION
-
-
-
+```{r}
+babynames %>%
+  group_by(name) %>%
+  mutate(
+    first_year = min(year),
+    last_year = max(year)) %>%
+  select(name, first_year, last_year)
+```
 ---
 
 6. There are 16 names that were assigned to babies of both sexes in _every_ year from 1880 to 2017.  List them.  Hint: if a name has zero births for a particular sex in a particular year, there is no entry in the data for that year/sex/name combination. Names that appear for both sexes (and only those names) will have $2 \cdot (2017 - 1880 + 1)$ entries in the table.
 
 ---
-
 ##### SOLUTION
-
-
+```{r}
+babynames %>%
+  group_by(name) %>%
+  mutate(
+    girl_count = ifelse(sex == "F", 1, 0),
+    boy_count = ifelse(sex == "M", 1, 0)) %>%
+  mutate(
+    total_count = sum(girl_count) + sum(boy_count)) %>%
+  select(name, total_count) %>%
+  filter(total_count == 276) #this wouldn't run
+  
+#will be 276 entries for both girls and boys of a name 
+```
 ---
 
 Interestingly, some of these (like John and William) have a strong connotation with a particular sex today, but they are such common names overall that a few instances of the opposite sex appear in every single year.
@@ -247,28 +264,64 @@ Interestingly, some of these (like John and William) have a strong connotation w
 7. Write a pipeline to return the 10 most common names (combining sexes) of the 1990s, arranged in descending order of popularity.
 
 ---
-
 ##### SOLUTION
-
-
+```{r}
+babynames %>%
+  filter(year %in% 1990:1999) %>% #this is where I got stuck
+  group_by(name) %>% 
+  mutate(
+    popularity = sum(prop)) %>%
+  select(name, popularity) %>%
+  arrange(desc(popularity)) %>%
+  distinct(name, popularity) %>%
+  head(n = 10)
+#this is when babynames stopped existing
+```
 ---
 
 8. This one is really challenging, but provides a strong test of how well you understand these verbs and how to combine them. Don't worry if you can't figure it out, but give it your best shot: **Find the names that were "popular" in your birth year** (where "popular" is defined as being assigned to 1% or more of _all_ births, irrespective of sex), and determine **which one made its first appearance latest**.  That is, what's the "youngest" popular name for your birth year?  (This (I think) requires more than one "pipeline": one to get a list of popular names in your birth year and another to extract the earliest appearance of each name and summarize.  You will probably need to use `pull(DataSet, VariableName)` to extract a column as a free-standing object, and the `%in%` operator to check whether an entry is in a set)!
 
 ---
-
 ##### SOLUTION
+```{r}
+names_1998 <- babynames %>%
+  filter(year == 1998) %>%
+  group_by(name) %>%
+  mutate(
+    total_births = sum(n)) %>%
+  filter(total_births > 39650)
 
+babynames %>%
+  filter(name %in% c(pull(names_1998, name))) %>%
+  group_by(name) %>%
+  mutate(
+    earliest_year = min(year)) %>%
+  slice_max(
+    order_by = earliest_year)
+
+babynames
+#total girls: 1938009
+#total boys: 2027135
+#total: 3965144
+#n must be more than: 39, 651
+```
 
 ---
 
 9. Create and plot a variable that represents the "name diversity" in each year, defined as the number of distinct names that appear in the dataset.  If you are so inclined, create additional variables that compute this for only males and for only females.
 
 ---
-
 ##### SOLUTION
+```{r}
+babynames %>%
+  group_by(year) %>%
+  mutate(
+    diversity = unique(name)) 
 
-
+diversity_plot <- ggplot(babynames, aes(x = diversity, y = year)) %>%
+  geom_line(stat = "identity", aes(y = diversity))
+  
+```
 ---
 
 
